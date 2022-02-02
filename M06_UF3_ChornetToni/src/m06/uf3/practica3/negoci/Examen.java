@@ -1,13 +1,16 @@
 package m06.uf3.practica3.negoci;
 
 import m06.uf3.practica3.presentacio.ExamenInterficie;
+import org.basex.BaseXServer;
+import org.basex.api.client.ClientSession;
 import org.basex.core.BaseXException;
 import org.basex.core.Context;
 import org.basex.core.cmd.CreateDB;
 import org.basex.core.cmd.Open;
 import org.basex.core.cmd.XQuery;
 
-import java.io.File;
+import java.io.IOException;
+import java.net.ConnectException;
 import java.util.Scanner;
 
 public class Examen {
@@ -15,19 +18,20 @@ public class Examen {
     private static Scanner s = new Scanner(System.in);
     private static ExamenInterficie interficie = new ExamenInterficie();
     private static Context context;
+    public static ClientSession session;
+    public static BaseXServer server;
     
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         int opcio = -1;
-        String carrera;
+        String carrera = "";
+
         //Es mostra el Header
         interficie.Header();
 
         do {
             
             try {
-
-
                 
                 //Demanem la opcio fins que sigui valida
                 do {
@@ -42,56 +46,70 @@ public class Examen {
                     //Es crea la BBDD
                     crearBBDD();
 
-                    //Mostrem carreres universitaries
-                    mostrarCarreras();
+                } else if (opcio == 2) {
+
+                    //Es crea la BBDD
+                    session = crearBBDDServidor();
+                    
+                }
+
+                if (opcio != 3) {
+                    //Mostrem carreras
+                    mostrarCarreras(opcio);
 
                     //Demanar Carrera al usuari
                     carrera = interficie.demanaCarrera();
 
                     //Buscar centre estudiantil
-                    mostrarCentre(carrera);
-                    
-                } else if (opcio == 2) {
-
-                    
-                    
+                    mostrarCentre(carrera, opcio);
                 }
-                
             } catch (Exception e) {
                 
                 //Errors
                 e.printStackTrace();
 
             } finally {
-                
-                //Tancar BBDD
-                try {
 
-                    //Tanquem la BBDD
-                    context.close();
+                if (context != null) {
+                    //Tancar BBDD
+                    try {
 
-                } catch (Exception e) {
+                        //Tanquem la BBDD
+                        context.close();
 
-                    //Avisem de que hi ha un error al tancar la BBDD
-                    System.out.println("No se ha podido cerrar la DB");
+                    } catch (Exception e) {
 
+                        //Avisem de que hi ha un error al tancar la BBDD
+                        interficie.mostrarMissatge("No s'ha pogut tancar el context");
+
+                    }
                 }
+
+                if (session != null) {
+                    try {
+                        session.close();
+                    } catch (Exception e) {
+                        interficie.mostrarMissatge("No s'ha pogut tancar la sessio");
+                    }
+                }
+
             }
             
         } while (opcio != 3);
         
     }
 
-    private static void mostrarCarreras() throws BaseXException {
+    private static void mostrarCarreras(int opcio) throws IOException {
 
-        interficie.mostrarMissatge(query("data(for $carrera in universidad//carreras return $carrera//carrera//nombre)\n\n"));
-
+        if (opcio == 1) interficie.mostrarMissatge(query("data(for $carrera in universidad//carreras return $carrera//carrera//nombre)\n\n"));
+        else interficie.mostrarMissatge(session.query("data(for $carrera in universidad//carreras return $carrera//carrera//nombre)\n\n").execute());
     }
 
-    private static void mostrarCentre(String carrera) throws BaseXException {
+    private static void mostrarCentre(String carrera, int opcio) throws IOException {
 
         String aux = "";
-        aux = query("data(//carrera[nombre='" + carrera + "']/centro)\n\n");
+        if (opcio == 1) aux = query("data(//carrera[nombre='" + carrera + "']/centro)\n\n");
+        else  aux = session.query("data(//carrera[nombre='" + carrera + "']/centro)\n\n").execute();
 
         if (!aux.equals("")) interficie.mostrarMissatge("Facultat: " + aux);
         else interficie.mostrarMissatge("La carrera no existeix.");
@@ -105,7 +123,7 @@ public class Examen {
         try {
 
             //Intentem obrir la BBDD
-            new Open("universitats").execute(context);
+            new Open("universitat").execute(context);
             interficie.mostrarMissatge("S'ha oberta la BBDD\n\n");
 
         } catch (Exception e) {
@@ -114,7 +132,7 @@ public class Examen {
 
                 //Creem la BBDD
                 interficie.mostrarMissatge("Create a new databae.\n\n");
-                new CreateDB("universitats", "universitats-v2.xml").execute(context);
+                new CreateDB("universitat", "universitats-v2.xml").execute(context);
                 interficie.mostrarMissatge("S'ha creat la BD\n\n");
 
             } catch (Exception ex) {
@@ -126,6 +144,23 @@ public class Examen {
         }
 
     }
+
+
+    private static ClientSession crearBBDDServidor() throws IOException {
+        try {
+            ClientSession session = new ClientSession("localhost", 1984, "admin", "admin");
+
+            //Intentem obrir la BBDD
+            session.execute(new Open("universitat"));
+            interficie.mostrarMissatge("S'ha conectat al servidor\n\n");
+            return session;
+        } catch (ConnectException exception) {
+            interficie.mostrarMissatge("No s'ha pogut conectar al servidor\n\n");
+        }
+
+        return null;
+    }
+
 
     //Executem la query i tornem el resultat
     static public String query(final String query) throws BaseXException {
