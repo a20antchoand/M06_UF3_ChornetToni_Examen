@@ -90,7 +90,11 @@ public class Examen {
 
     private static void mostrarCentre(String carrera) throws BaseXException {
 
-        interficie.mostrarMissatge("Facultat: " + query("data(//carrera[nombre='" + carrera + "']/centro)\n\n"));
+        String aux = "";
+        aux = query("data(//carrera[nombre='" + carrera + "']/centro)\n\n");
+
+        if (!aux.equals("")) interficie.mostrarMissatge("Facultat: " + aux);
+        else interficie.mostrarMissatge("La carrera no existeix.");
 
     }
 
